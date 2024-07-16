@@ -31,6 +31,12 @@ const client = new MongoClient(uri, {
     },
 });
 
+const cookieOptions = {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: process.env.NODE_ENV === "production" ? "none" : "strict",
+}
+
 async function run() {
     try {
         // Connect the client to the server	(optional starting in v4.7)
@@ -38,6 +44,12 @@ async function run() {
         // Send a ping to confirm a successful connection
         const db = client.db("QuickCashDB");
         const usersCollection = db.collection("users");
+
+        app.post("/jwt", (req, res) => {
+            const user = req.body
+            const token = jwt.sign(user, process.env.TOKEN_SECRET, { expiresIn: "365d" })
+            res.cookie("token", token, cookieOptions).send({ success: true })
+        })
 
         app.get("/users", async (req, res) => {
             const result = await usersCollection.find().toArray();
