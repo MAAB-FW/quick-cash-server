@@ -35,7 +35,7 @@ const cookieOptions = {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: process.env.NODE_ENV === "production" ? "none" : "strict",
-}
+};
 
 async function run() {
     try {
@@ -45,11 +45,34 @@ async function run() {
         const db = client.db("QuickCashDB");
         const usersCollection = db.collection("users");
 
+        // middleware
+        const verifyToken = (req, res, next) => {
+            const token = req?.cookies?.token;
+            if (!token) return res.status(401).send({ message: "Unauthorized access!" });
+            jwt.verify(token, process.env.TOKEN_SECRET, (err, decoded) => {
+                if (err) {
+                    return res.status(401).send({ message: "Unauthorized access!" });
+                }
+                req.decoded = decoded;
+                next();
+            });
+        };
+
+        app.get("/userInfo", verifyToken, async (req, res) => {
+            user = req.decoded;
+            const result = await usersCollection.findOne({ email: req.decoded.email });
+            res.send(result);
+        });
+
         app.post("/jwt", (req, res) => {
-            const user = req.body
-            const token = jwt.sign(user, process.env.TOKEN_SECRET, { expiresIn: "365d" })
-            res.cookie("token", token, cookieOptions).send({ success: true })
-        })
+            const user = req.body;
+            const token = jwt.sign(user, process.env.TOKEN_SECRET, { expiresIn: "365d" });
+            res.cookie("token", token, cookieOptions).send({ success: true });
+        });
+
+        app.post("/logout", (req, res) => {
+            res.clearCookie("token", { ...cookieOptions, maxAge: 0 }).send({ success: true });
+        });
 
         app.get("/users", async (req, res) => {
             const result = await usersCollection.find().toArray();
@@ -60,7 +83,7 @@ async function run() {
             const email = req.params.email;
             const pin = req.body.pin;
             const user = await usersCollection.findOne({ email });
-            const pinMatching = bcrypt.compareSync(pin, user.hashPin);
+            const pinMatching = bcrypt.compareSync(pin, user.pin);
             if (!pinMatching || !user) {
                 return res.send({ message: "Invalid credentials!", status: 403 });
             }
@@ -76,7 +99,7 @@ async function run() {
             }
             const doc = {
                 ...user,
-                hashPin,
+                pin: hashPin,
             };
             const result = await usersCollection.insertOne(doc);
             res.send(result);
