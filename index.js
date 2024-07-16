@@ -44,9 +44,19 @@ async function run() {
             res.send(result);
         });
 
+        app.post("/login/:email", async (req, res) => {
+            const email = req.params.email;
+            const pin = req.body.pin;
+            const user = await usersCollection.findOne({ email });
+            const pinMatching = bcrypt.compareSync(pin, user.hashPin);
+            if (!pinMatching || !user) {
+                return res.send({ message: "Invalid credentials!", status: 403 });
+            }
+            res.send(user);
+        });
+
         app.post("/createUser", async (req, res) => {
             const user = req.body;
-            const phone = JSON.parse(user.phone);
             const hashPin = bcrypt.hashSync(user.pin, 10);
             const isExist = await usersCollection.findOne({ email: user.email });
             if (isExist) {
@@ -54,8 +64,7 @@ async function run() {
             }
             const doc = {
                 ...user,
-                pin: hashPin,
-                phone: phone,
+                hashPin,
             };
             const result = await usersCollection.insertOne(doc);
             res.send(result);
