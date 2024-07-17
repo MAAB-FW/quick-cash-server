@@ -84,10 +84,38 @@ async function run() {
         app.get("/users", verifyToken, verifyAdmin, async (req, res) => {
             const search = req.query.search;
             let query = {};
+            // let query = { $or: [{ role: "user" }, { role: "agent" }] };
+            // if (search) {
+            //     query = { $and: [{ $or: [{ role: "user" }, { role: "agent" }] }, { name: { $regex: search, $options: "i" } }] };
+            // }
             if (search) {
                 query = { name: { $regex: search, $options: "i" } };
             }
             const result = await usersCollection.find(query).toArray();
+            res.send(result);
+        });
+
+        app.patch("/userStatus/:id", verifyToken, verifyAdmin, async (req, res) => {
+            const id = req.params.id;
+            const status = req.body.status;
+            const button = req.body.button;
+            // let upSt;
+            console.log(id, status, button);
+            let updateDoc = {
+                $set: {
+                    status: button,
+                },
+            };
+            if (button === "approved" && status === "pending") {
+                updateDoc = {
+                    $set: {
+                        status: "approved",
+                        balance: 40,
+                    },
+                };
+            }
+
+            const result = await usersCollection.updateOne({ _id: new ObjectId(id) }, updateDoc);
             res.send(result);
         });
 
