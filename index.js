@@ -55,6 +55,15 @@ async function run() {
             });
         };
 
+        const verifyAdmin = async (req, res, next) => {
+            const email = req.decoded.email;
+            const user = await usersCollection.findOne({ email });
+            if (user.role !== "admin") {
+                return res.status(403).send({ message: "Forbidden access!" });
+            }
+            next();
+        };
+
         app.get("/userInfo", verifyToken, async (req, res) => {
             user = req.decoded;
             // console.log(user);
@@ -68,12 +77,17 @@ async function run() {
             res.send({ token });
         });
 
-        app.post("/logout", (req, res) => {
-            res.clearCookie("token", { ...cookieOptions, maxAge: 0 }).send({ success: true });
-        });
+        // app.post("/logout", (req, res) => {
+        //     res.clearCookie("token", { ...cookieOptions, maxAge: 0 }).send({ success: true });
+        // });
 
-        app.get("/users", async (req, res) => {
-            const result = await usersCollection.find().toArray();
+        app.get("/users", verifyToken, verifyAdmin, async (req, res) => {
+            const search = req.query.search;
+            let query = {};
+            if (search) {
+                query = { name: { $regex: search, $options: "i" } };
+            }
+            const result = await usersCollection.find(query).toArray();
             res.send(result);
         });
 
@@ -103,7 +117,7 @@ async function run() {
             res.send(result);
         });
 
-        app.get("/role/:email", async (req, res) => {
+        app.get("/role/:email", verifyToken, async (req, res) => {
             const email = req.params.email;
             const user = await usersCollection.findOne({ email: email });
             const role = user.role;
