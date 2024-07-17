@@ -97,24 +97,33 @@ async function run() {
 
         app.patch("/userStatus/:id", verifyToken, verifyAdmin, async (req, res) => {
             const id = req.params.id;
+            const role = req.body.role;
             const status = req.body.status;
             const button = req.body.button;
-            // let upSt;
-            console.log(id, status, button);
+            // console.log(id, role, status, button);
             let updateDoc = {
                 $set: {
                     status: button,
                 },
             };
             if (button === "approved" && status === "pending") {
-                updateDoc = {
-                    $set: {
-                        status: "approved",
-                        balance: 40,
-                    },
-                };
+                if (role === "user") {
+                    updateDoc = {
+                        $set: {
+                            status: "approved",
+                            balance: 40,
+                        },
+                    };
+                }
+                if (role === "agent") {
+                    updateDoc = {
+                        $set: {
+                            status: "approved",
+                            balance: 10000,
+                        },
+                    };
+                }
             }
-
             const result = await usersCollection.updateOne({ _id: new ObjectId(id) }, updateDoc);
             res.send(result);
         });
