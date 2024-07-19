@@ -132,8 +132,11 @@ async function run() {
             const email = req.params.email;
             const pin = req.body.pin;
             const user = await usersCollection.findOne({ email });
+            if (!user) {
+                return res.send({ message: "Invalid credentials!", status: 403 });
+            }
             const pinMatching = bcrypt.compareSync(pin, user.pin);
-            if (!pinMatching || !user) {
+            if (!pinMatching) {
                 return res.send({ message: "Invalid credentials!", status: 403 });
             }
             res.send(user);
