@@ -38,6 +38,7 @@ async function run() {
         // Send a ping to confirm a successful connection
         const db = client.db("QuickCashDB");
         const usersCollection = db.collection("users");
+        const transactionsCollection = db.collection("transactions");
 
         // middleware
         const verifyToken = (req, res, next) => {
@@ -162,6 +163,46 @@ async function run() {
             const user = await usersCollection.findOne({ email: email });
             const role = user.role;
             res.send({ role });
+        });
+
+        app.post("/sendMoney", verifyToken, async (req, res) => {
+            const sendMoneyInfo = req.body;
+            const senderPin = sendMoneyInfo.pin;
+            console.log(sendMoneyInfo);
+            const senderUser = await usersCollection.findOne({ email: sendMoneyInfo.senderInfo.email });
+            const pinMatching = bcrypt.compareSync(senderPin, senderUser.pin);
+            if (!pinMatching) {
+                return res.send({ message: "Wrong Pin!" });
+            }
+            const recipientUser = await usersCollection.findOne({ phone: sendMoneyInfo.receiverPhone });
+            if (!recipientUser) {
+                return res.send({ message: "Recipient not found!" });
+            }
+            const amount = JSON.parse(sendMoneyInfo.amount);
+            let decreaseAmount = amount;
+            let fee;
+            if (amount > 100) {
+                decreaseAmount = amount + 5;
+                fee = 5;
+            }
+            const increaseDoc = {
+                $inc: { balance: +amount },
+            };
+            const decreaseDoc = {
+                $inc: { balance: -decreaseAmount },
+            };
+
+            const increaseRecipientBalance = await usersCollection.updateOne({ phone: sendMoneyInfo.receiverPhone }, increaseDoc);
+            const decreaseSenderBalance = await usersCollection.updateOne({ email: sendMoneyInfo.senderInfo.email }, decreaseDoc);
+
+            const result = await transactionsCollection.insertOne({
+                senderInfo: sendMoneyInfo.senderInfo,
+                receiverPhone: sendMoneyInfo.receiverPhone,
+                amount: JSON.parse(sendMoneyInfo.amount),
+                type: sendMoneyInfo.type,
+                fee,
+            });
+            res.send(result);
         });
 
         // await client.db("admin").command({ ping: 1 });
