@@ -147,8 +147,9 @@ async function run() {
             const user = req.body;
             const hashPin = bcrypt.hashSync(user.pin, 10);
             const isExist = await usersCollection.findOne({ email: user.email });
-            if (isExist) {
-                return res.send({ message: "user already exist!", status: isExist.status });
+            const isNumExist = await usersCollection.findOne({ phone: user.phone });
+            if (isExist || isNumExist) {
+                return res.send({ message: "user already exist!", status: isExist?.status || isNumExist?.status });
             }
             const doc = {
                 ...user,
@@ -168,13 +169,13 @@ async function run() {
         app.post("/sendMoney", verifyToken, async (req, res) => {
             const sendMoneyInfo = req.body;
             const senderPin = sendMoneyInfo.pin;
-            console.log(sendMoneyInfo);
+            // console.log(sendMoneyInfo);
             const senderUser = await usersCollection.findOne({ email: sendMoneyInfo.senderInfo.email });
             const pinMatching = bcrypt.compareSync(senderPin, senderUser.pin);
             if (!pinMatching) {
                 return res.send({ message: "Wrong Pin!" });
             }
-            const recipientUser = await usersCollection.findOne({ phone: sendMoneyInfo.receiverPhone });
+            const recipientUser = await usersCollection.findOne({ phone: sendMoneyInfo.receiverPhone, role: "user" });
             if (!recipientUser) {
                 return res.send({ message: "Recipient not found!" });
             }
@@ -200,8 +201,21 @@ async function run() {
                 receiverPhone: sendMoneyInfo.receiverPhone,
                 amount: JSON.parse(sendMoneyInfo.amount),
                 type: sendMoneyInfo.type,
+                time: sendMoneyInfo.time,
                 fee,
             });
+            res.send(result);
+        });
+
+        app.post("/cashInReq", verifyToken, async (req, res) => {
+            const cashInReq = req.body;
+            console.log(cashInReq);
+            const amount = JSON.parse(cashInReq.amount);
+            const agent = await usersCollection.findOne({ phone: cashInReq.agentPhone, role: "agent" });
+            if (!agent) {
+                return res.send({ message: "agent not found!" });
+            }
+            const result = await transactionsCollection.insertOne({ ...cashInReq, amount: amount });
             res.send(result);
         });
 
