@@ -65,6 +65,16 @@ async function run() {
             next();
         };
 
+        const verifyAgent = async (req, res, next) => {
+            const email = req.decoded.email;
+            const agent = await usersCollection.findOne({ email });
+            if (agent.role !== "agent") {
+                return res.status(403).send({ message: "Forbidden access!" });
+            }
+            req.verifyAgent = agent;
+            next();
+        };
+
         app.get("/userInfo", verifyToken, async (req, res) => {
             user = req.decoded;
             // console.log(user);
@@ -209,13 +219,47 @@ async function run() {
 
         app.post("/cashInReq", verifyToken, async (req, res) => {
             const cashInReq = req.body;
-            console.log(cashInReq);
             const amount = JSON.parse(cashInReq.amount);
             const agent = await usersCollection.findOne({ phone: cashInReq.agentPhone, role: "agent" });
             if (!agent) {
                 return res.send({ message: "agent not found!" });
             }
             const result = await transactionsCollection.insertOne({ ...cashInReq, amount: amount });
+            res.send(result);
+        });
+
+        app.get("/transactionManagement", verifyToken, verifyAgent, async (req, res) => {
+            const result = await transactionsCollection
+                .find({ status: "requested", agentPhone: req.verifyAgent.phone })
+                .toArray();
+            res.send(result);
+        });
+
+        app.patch("/transactionAction", verifyToken, verifyAgent, async (req, res) => {
+            const id = req.body.id;
+            const action = req.body.action;
+            if (action === "decline") {
+                const result = await transactionsCollection.updateOne({ _id: new ObjectId(id) }, { $set: { status: "decline" } });
+                return res.send(result);
+            }
+            const transaction = await transactionsCollection.findOne({ _id: new ObjectId(id) });
+            console.log(transaction);
+
+            const increaseDoc = await usersCollection.updateOne(
+                { phone: transaction.userInfo.phone },
+                {
+                    $inc: { balance: +transaction.amount },
+                },
+            );
+
+            const decreaseDoc = await usersCollection.updateOne(
+                { phone: transaction.agentPhone },
+                {
+                    $inc: { balance: -transaction.amount },
+                },
+            );
+
+            const result = await transactionsCollection.updateOne({ _id: new ObjectId(id) }, { $set: { status: "accept" } });
             res.send(result);
         });
 
