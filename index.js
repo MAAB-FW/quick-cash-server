@@ -222,7 +222,7 @@ async function run() {
             const amount = JSON.parse(cashInReq.amount);
             const agent = await usersCollection.findOne({ phone: cashInReq.agentPhone, role: "agent" });
             if (!agent) {
-                return res.send({ message: "agent not found!" });
+                return res.send({ message: "Agent not found!" });
             }
             const result = await transactionsCollection.insertOne({ ...cashInReq, amount: amount });
             res.send(result);
@@ -244,22 +244,71 @@ async function run() {
             }
             const transaction = await transactionsCollection.findOne({ _id: new ObjectId(id) });
             console.log(transaction);
+            if (transaction.type === "Cash In") {
+                const increaseDoc = await usersCollection.updateOne(
+                    { phone: transaction.userInfo.phone },
+                    {
+                        $inc: { balance: +transaction.amount },
+                    },
+                );
 
-            const increaseDoc = await usersCollection.updateOne(
-                { phone: transaction.userInfo.phone },
-                {
-                    $inc: { balance: +transaction.amount },
-                },
-            );
+                const decreaseDoc = await usersCollection.updateOne(
+                    { phone: transaction.agentPhone },
+                    {
+                        $inc: { balance: -transaction.amount },
+                    },
+                );
 
-            const decreaseDoc = await usersCollection.updateOne(
-                { phone: transaction.agentPhone },
-                {
-                    $inc: { balance: -transaction.amount },
-                },
-            );
+                const result = await transactionsCollection.updateOne({ _id: new ObjectId(id) }, { $set: { status: "accept" } });
+                res.send(result);
+            }
+            if (transaction.type === "Cash Out") {
+                const amount = transaction.amount;
+                const fee = transaction.fee;
+                const balance = amount + fee;
+                const decreaseDoc = await usersCollection.updateOne(
+                    { phone: transaction.userInfo.phone },
+                    {
+                        $inc: { balance: -balance },
+                    },
+                );
 
-            const result = await transactionsCollection.updateOne({ _id: new ObjectId(id) }, { $set: { status: "accept" } });
+                const increaseDoc = await usersCollection.updateOne(
+                    { phone: transaction.agentPhone },
+                    {
+                        $inc: { balance: +balance },
+                    },
+                );
+
+                const result = await transactionsCollection.updateOne({ _id: new ObjectId(id) }, { $set: { status: "accept" } });
+                res.send(result);
+            }
+        });
+
+        app.post("/cashOutReq", verifyToken, async (req, res) => {
+            const cashOutReq = req.body;
+            const amount = JSON.parse(cashOutReq.amount);
+            const fee = (amount * 1.5) / 100;
+            const pin = cashOutReq.pin;
+            const user = await usersCollection.findOne({ email: cashOutReq.userInfo.email });
+            const pinMatching = bcrypt.compareSync(pin, user.pin);
+            if (!pinMatching) {
+                return res.send({ message: "Wrong Pin!" });
+            }
+            const agent = await usersCollection.findOne({ phone: cashOutReq.agentPhone, role: "agent" });
+            if (!agent) {
+                return res.send({ message: "Agent not found!" });
+            }
+            const doc = {
+                userInfo: cashOutReq.userInfo,
+                agentPhone: cashOutReq.agentPhone,
+                amount: amount,
+                type: cashOutReq.type,
+                status: cashOutReq.status,
+                time: cashOutReq.time,
+                fee,
+            };
+            const result = await transactionsCollection.insertOne(doc);
             res.send(result);
         });
 
