@@ -312,6 +312,11 @@ async function run() {
             res.send(result);
         });
 
+        app.get("/historyAgent", verifyToken, verifyAgent, async (req, res) => {
+            const result = await transactionsCollection.find({ agentPhone: req.verifyAgent.phone }).toArray();
+            res.send(result);
+        });
+
         // await client.db("admin").command({ ping: 1 });
         // console.log("Pinged your deployment. You successfully connected to MongoDB!");
     } finally {
