@@ -180,7 +180,7 @@ async function run() {
             const sendMoneyInfo = req.body;
             const senderPin = sendMoneyInfo.pin;
             // console.log(sendMoneyInfo);
-            const senderUser = await usersCollection.findOne({ email: sendMoneyInfo.senderInfo.email });
+            const senderUser = await usersCollection.findOne({ email: sendMoneyInfo.userInfo.email });
             const pinMatching = bcrypt.compareSync(senderPin, senderUser.pin);
             if (!pinMatching) {
                 return res.send({ message: "Wrong Pin!" });
@@ -204,10 +204,10 @@ async function run() {
             };
 
             const increaseRecipientBalance = await usersCollection.updateOne({ phone: sendMoneyInfo.receiverPhone }, increaseDoc);
-            const decreaseSenderBalance = await usersCollection.updateOne({ email: sendMoneyInfo.senderInfo.email }, decreaseDoc);
+            const decreaseSenderBalance = await usersCollection.updateOne({ email: sendMoneyInfo.userInfo.email }, decreaseDoc);
 
             const result = await transactionsCollection.insertOne({
-                senderInfo: sendMoneyInfo.senderInfo,
+                userInfo: sendMoneyInfo.userInfo,
                 receiverPhone: sendMoneyInfo.receiverPhone,
                 amount: JSON.parse(sendMoneyInfo.amount),
                 type: sendMoneyInfo.type,
@@ -313,7 +313,21 @@ async function run() {
         });
 
         app.get("/historyAgent", verifyToken, verifyAgent, async (req, res) => {
-            const result = await transactionsCollection.find({ agentPhone: req.verifyAgent.phone }).toArray();
+            const result = await transactionsCollection
+                .find({ agentPhone: req.verifyAgent.phone })
+                .limit(20)
+                .sort("time", -1)
+                .toArray();
+            res.send(result);
+        });
+
+        app.get("/historyUser/:phone", verifyToken, async (req, res) => {
+            const phone = req.params.phone;
+            const result = await transactionsCollection
+                .find({ $or: [{ "userInfo.phone": phone }, { receiverPhone: phone }] })
+                .limit(10)
+                .sort("time", -1)
+                .toArray();
             res.send(result);
         });
 
