@@ -15,7 +15,7 @@ app.use(express.json());
 //Must remove "/" from your production URL
 app.use(
     cors({
-        origin: ["http://localhost:5173", "https://quickcash-job-task.vercel.app"],
+        origin: ["http://localhost:5173", "https://quickcash-job-task.vercel.app", "https://quickcash-mfs.vercel.app"],
         credentials: true,
     }),
 );
@@ -328,6 +328,11 @@ async function run() {
                 .limit(10)
                 .sort("time", -1)
                 .toArray();
+            res.send(result);
+        });
+
+        app.get("/systemMonitoring", verifyToken, verifyAdmin, async (req, res) => {
+            const result = await transactionsCollection.find().toArray();
             res.send(result);
         });
 
